@@ -23,6 +23,7 @@
       UTF-8
     </project.build.sourceEncoding>
     <spring-boot.version>3.2.11</spring-boot.version>
+    <spring-cloud.version>2023.0.3</spring-cloud.version>
   </properties>
 
   <dependencyManagement>
@@ -31,6 +32,13 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-dependencies</artifactId>
         <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -50,9 +58,11 @@
   </build>
 
   <modules>
+    <module>eureka-server</module>
     <module>servicio-libros</module>
     <module>servicio-usuarios</module>
     <module>servicio-prestamos</module>
+    <module>servicio-notificaciones</module>
   </modules>
 
 </project>
