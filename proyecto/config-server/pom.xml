@@ -11,27 +11,19 @@
     <version>1.0.0</version>
   </parent>
 
-  <artifactId>api-gateway</artifactId>
-  <name>api-gateway</name>
+  <artifactId>config-server</artifactId>
+  <name>config-server</name>
   <description>
-    Proyecto Biblioteca -- puerta de enlace unica
-    de la API
+    Proyecto Biblioteca -- servidor de configuracion
+    centralizada (perfil nativo, config-repo local)
   </description>
 
   <dependencies>
     <dependency>
       <groupId>org.springframework.cloud</groupId>
-      <artifactId>spring-cloud-starter-gateway</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.cloud</groupId>
       <artifactId>
-        spring-cloud-starter-netflix-eureka-client
+        spring-cloud-config-server
       </artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.cloud</groupId>
-      <artifactId>spring-cloud-starter-config</artifactId>
     </dependency>
   </dependencies>
 

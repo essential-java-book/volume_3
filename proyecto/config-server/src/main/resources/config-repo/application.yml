@@ -1,0 +1,12 @@
+# Configuracion comun a los ocho modulos.
+# Cada modulo la recibe primero y luego la suya
+# propia (<spring.application.name>.yml) la
+# completa o la sobreescribe.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+logging:
+  pattern:
+    console: "%d{HH:mm:ss} %-5level %logger{36} - %msg%n"
