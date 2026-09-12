@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Proyecto Biblioteca -- microservicio de
@@ -18,11 +19,14 @@ import org.springframework.context.annotation.Bean;
  * del Config Server desde el Capitulo 5; usa
  * clientes Feign (LibroCliente, UsuarioCliente)
  * desde el Capitulo 6 para validar el libro y el
- * usuario al crear un prestamo.
+ * usuario al crear un prestamo. @EnableScheduling
+ * desde el Capitulo 12: lo necesita OutboxRelay
+ * para su @Scheduled periodico.
  */
 @SpringBootApplication
 @EnableDiscoveryClient
 @EnableFeignClients
+@EnableScheduling
 public class ServicioPrestamosApplication {
 
     private static final Logger LOG =

@@ -1,6 +1,7 @@
 package com.biblioteca.prestamos.servicio;
 
 import com.biblioteca.prestamos.cliente.ValidadorRelaciones;
+import com.biblioteca.prestamos.dominio.EstadoPrestamo;
 import com.biblioteca.prestamos.dominio.Prestamo;
 import com.biblioteca.prestamos.dominio.PrestamoNoEncontradoException;
 import com.biblioteca.prestamos.dominio.RecursoRelacionadoNoEncontradoException;
@@ -9,6 +10,7 @@ import com.biblioteca.prestamos.repositorio.PrestamoRepositorio;
 import feign.FeignException;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Logica de negocio del microservicio de prestamos.
@@ -21,9 +23,14 @@ import org.springframework.stereotype.Service;
  * NoEncontradoException), mientras que un fallo
  * tecnico del servicio dependiente se traduce en
  * ServicioNoDisponibleException. Desde el Capitulo
- * 8, "crear" y "marcarDevuelto" publican un evento
- * en Kafka despues de guardar -- todavia sin saga ni
- * compensacion (eso llega en el Capitulo 12).
+ * 12, "crear" crea el prestamo SOLICITADO y lo
+ * confirma de inmediato (finalizacion optimista de
+ * la saga de coreografia): el guardado del Prestamo
+ * y la escritura en el Outbox comparten transaccion
+ * (@Transactional), y si servicio-libros o
+ * servicio-usuarios no puede completar su parte,
+ * cancelarPorCompensacion() deshace esto despues, de
+ * forma asincrona.
  */
 @Service
 public class PrestamoServicio {
@@ -57,6 +64,7 @@ public class PrestamoServicio {
             .findByUsuarioId(usuarioId);
     }
 
+    @Transactional
     public Prestamo crear(Long libroId,
             Long usuarioId) {
         validarLibro(libroId);
@@ -65,11 +73,15 @@ public class PrestamoServicio {
             new Prestamo(libroId, usuarioId);
         Prestamo guardado =
             repositorio.save(prestamo);
+        guardado.confirmar();
+        Prestamo confirmado =
+            repositorio.save(guardado);
         publicador.publicarCreado(
-            guardado.getId(), libroId, usuarioId);
-        return guardado;
+            confirmado.getId(), libroId, usuarioId);
+        return confirmado;
     }
 
+    @Transactional
     public Prestamo marcarDevuelto(Long id) {
         Prestamo prestamo = buscarPorId(id);
         prestamo.marcarDevuelto();
@@ -79,6 +91,24 @@ public class PrestamoServicio {
             guardado.getLibroId(),
             guardado.getUsuarioId());
         return guardado;
+    }
+
+    /**
+     * Compensacion de la saga (Capitulo 12): la
+     * invoca PrestamoCompensacionListener al recibir
+     * PRESTAMO_CANCELADO. No cancela un prestamo ya
+     * DEVUELTO -- una compensacion tardia nunca debe
+     * deshacer una devolucion real.
+     */
+    @Transactional
+    public void cancelarPorCompensacion(
+            Long prestamoId) {
+        Prestamo prestamo = buscarPorId(prestamoId);
+        if (prestamo.getEstado()
+                != EstadoPrestamo.DEVUELTO) {
+            prestamo.cancelar();
+            repositorio.save(prestamo);
+        }
     }
 
     private void validarLibro(Long libroId) {

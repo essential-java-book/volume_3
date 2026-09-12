@@ -1,15 +1,21 @@
 package com.biblioteca.prestamos.evento;
 
+import com.biblioteca.prestamos.outbox.OutboxEvento;
+import com.biblioteca.prestamos.outbox.OutboxEventoRepositorio;
 import java.time.LocalDateTime;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Unico productor del topic "prestamos-eventos"
- * (informe SS3.4-25). La clave del mensaje es el id
- * del prestamo: todos los eventos de un mismo
- * prestamo caen en la misma particion y llegan en
- * orden a cada consumidor.
+ * Unico productor logico del topic "prestamos-
+ * eventos" (informe SS3.4-25). Desde el Capitulo 12
+ * ya NO publica directamente en Kafka: escribe una
+ * fila en la tabla outbox_eventos, en la misma
+ * transaccion que el guardado del Prestamo (patron
+ * Outbox -- informe SS3.4-26). El envio real a
+ * Kafka lo hace OutboxRelay, en un proceso aparte,
+ * por lo que el mensaje puede tardar un poco en
+ * llegar pero nunca se pierde si Kafka no responde
+ * en el instante de guardar.
  */
 @Component
 public class PrestamoEventoPublicador {
@@ -17,13 +23,13 @@ public class PrestamoEventoPublicador {
     public static final String TOPIC =
         "prestamos-eventos";
 
-    private final KafkaTemplate<String, PrestamoEvento>
-        kafkaTemplate;
+    private final OutboxEventoRepositorio
+        outboxRepositorio;
 
     public PrestamoEventoPublicador(
-            KafkaTemplate<String, PrestamoEvento>
-                kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+            OutboxEventoRepositorio
+                outboxRepositorio) {
+        this.outboxRepositorio = outboxRepositorio;
     }
 
     public void publicarCreado(Long prestamoId,
@@ -41,10 +47,9 @@ public class PrestamoEventoPublicador {
     private void publicar(Long prestamoId,
             Long libroId, Long usuarioId,
             TipoEvento tipo) {
-        PrestamoEvento evento = new PrestamoEvento(
+        OutboxEvento outbox = new OutboxEvento(
             prestamoId, libroId, usuarioId, tipo,
             LocalDateTime.now());
-        kafkaTemplate.send(TOPIC,
-            String.valueOf(prestamoId), evento);
+        outboxRepositorio.save(outbox);
     }
 }

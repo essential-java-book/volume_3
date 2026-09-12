@@ -34,6 +34,12 @@ public class NotificacionListener {
                 "[NOTIFICACION] Prestamo {} "
                     + "devuelto (libro {})",
                 evento.prestamoId(), evento.libroId());
+            case PRESTAMO_CANCELADO -> LOG.info(
+                "[NOTIFICACION] Prestamo {} "
+                    + "cancelado (saga, libro {}, "
+                    + "usuario {})",
+                evento.prestamoId(), evento.libroId(),
+                evento.usuarioId());
         }
     }
 }

@@ -63,7 +63,12 @@ public class PrestamoControlador {
             .body(creado);
     }
 
-    @PatchMapping("/{id}/devolucion")
+    /**
+     * Verbo "/devolver" (decision canonica
+     * SS3.4-20; corregido en el Capitulo 12 desde
+     * "/devolucion", que no seguia el informe).
+     */
+    @PatchMapping("/{id}/devolver")
     public Prestamo marcarDevuelto(
             @PathVariable Long id) {
         return servicio.marcarDevuelto(id);

@@ -9,5 +9,6 @@ package com.biblioteca.notificaciones.evento;
  */
 public enum TipoEvento {
     PRESTAMO_CREADO,
-    PRESTAMO_DEVUELTO
+    PRESTAMO_DEVUELTO,
+    PRESTAMO_CANCELADO
 }

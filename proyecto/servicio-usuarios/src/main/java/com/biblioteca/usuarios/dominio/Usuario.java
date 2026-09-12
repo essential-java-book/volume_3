@@ -1,13 +1,18 @@
 package com.biblioteca.usuarios.dominio;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Usuario (socio) de la Biblioteca Municipal
@@ -41,6 +46,23 @@ public class Usuario {
      * coherencia, hallazgo 3-D-20).
      */
     private int prestamosActivos = 0;
+
+    /**
+     * Ids de los prestamos que ya se han contado
+     * en prestamosActivos (Capitulo 12): sin este
+     * registro, una compensacion tardia podria
+     * restar un prestamo que este usuario nunca
+     * llego a registrar (por ejemplo, si la validacion
+     * fallo porque el usuario estaba inactivo).
+     */
+    @ElementCollection
+    @CollectionTable(
+        name = "usuario_prestamos_registrados",
+        joinColumns = @JoinColumn(
+            name = "usuario_id"))
+    @Column(name = "prestamo_id")
+    private Set<Long> prestamosRegistrados =
+        new HashSet<>();
 
     protected Usuario() {
         // JPA
@@ -94,13 +116,39 @@ public class Usuario {
         return prestamosActivos;
     }
 
-    public void incrementarPrestamosActivos() {
-        this.prestamosActivos++;
+    /**
+     * Registra un prestamo nuevo para este usuario
+     * (participa en la saga del Capitulo 12, al
+     * recibir PRESTAMO_CREADO). Devuelve false sin
+     * cambiar nada si el usuario esta inactivo --
+     * quien llama publicara entonces PRESTAMO_
+     * CANCELADO. Idempotente frente a reentregas: si
+     * ese prestamoId ya estaba registrado, no vuelve
+     * a incrementar el contador.
+     */
+    public boolean registrarPrestamo(
+            Long prestamoId) {
+        if (!activo) {
+            return false;
+        }
+        if (prestamosRegistrados.add(prestamoId)) {
+            prestamosActivos++;
+        }
+        return true;
     }
 
-    public void decrementarPrestamosActivos() {
-        if (this.prestamosActivos > 0) {
-            this.prestamosActivos--;
+    /**
+     * Libera un prestamo (compensacion de la saga o
+     * devolucion). Si ese prestamoId no estaba
+     * registrado -- por ejemplo, porque este mismo
+     * usuario fue quien hizo fallar la validacion --
+     * no hace nada: nunca se resta lo que no se
+     * llego a sumar.
+     */
+    public void liberarPrestamo(Long prestamoId) {
+        if (prestamosRegistrados.remove(prestamoId)
+                && prestamosActivos > 0) {
+            prestamosActivos--;
         }
     }
 }
