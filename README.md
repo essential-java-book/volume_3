@@ -31,11 +31,11 @@ Cada capítulo del libro termina con una sección «Proyecto Biblioteca
 git clone https://github.com/essential-java-book/volume_3.git
 cd volume_3
 git checkout v3-cap08     # el proyecto tal como queda al terminar el capítulo 8
-git checkout main         # volver al estado final
+git checkout master       # volver al estado final
 ```
 
 Si no usas Git, en la página del repositorio elige el tag en el
-desplegable de ramas (**main ▾ → Tags**) y descarga el ZIP de ese
+desplegable de ramas (**master ▾ → Tags**) y descarga el ZIP de ese
 capítulo.
 
 | Cap. | Tag | Lo que añade al proyecto |
