@@ -4,6 +4,7 @@ import com.biblioteca.prestamos.cliente.ValidadorRelaciones;
 import com.biblioteca.prestamos.dominio.Prestamo;
 import com.biblioteca.prestamos.dominio.PrestamoNoEncontradoException;
 import com.biblioteca.prestamos.dominio.RecursoRelacionadoNoEncontradoException;
+import com.biblioteca.prestamos.evento.PrestamoEventoPublicador;
 import com.biblioteca.prestamos.repositorio.PrestamoRepositorio;
 import feign.FeignException;
 import java.util.List;
@@ -19,20 +20,25 @@ import org.springframework.stereotype.Service;
  * 404 sigue siendo "no existe" (RecursoRelacionado-
  * NoEncontradoException), mientras que un fallo
  * tecnico del servicio dependiente se traduce en
- * ServicioNoDisponibleException. Hasta el Capitulo
- * 12 no hay saga ni compensacion.
+ * ServicioNoDisponibleException. Desde el Capitulo
+ * 8, "crear" y "marcarDevuelto" publican un evento
+ * en Kafka despues de guardar -- todavia sin saga ni
+ * compensacion (eso llega en el Capitulo 12).
  */
 @Service
 public class PrestamoServicio {
 
     private final PrestamoRepositorio repositorio;
     private final ValidadorRelaciones validador;
+    private final PrestamoEventoPublicador publicador;
 
     public PrestamoServicio(
             PrestamoRepositorio repositorio,
-            ValidadorRelaciones validador) {
+            ValidadorRelaciones validador,
+            PrestamoEventoPublicador publicador) {
         this.repositorio = repositorio;
         this.validador = validador;
+        this.publicador = publicador;
     }
 
     public List<Prestamo> listarTodos() {
@@ -57,13 +63,22 @@ public class PrestamoServicio {
         validarUsuario(usuarioId);
         Prestamo prestamo =
             new Prestamo(libroId, usuarioId);
-        return repositorio.save(prestamo);
+        Prestamo guardado =
+            repositorio.save(prestamo);
+        publicador.publicarCreado(
+            guardado.getId(), libroId, usuarioId);
+        return guardado;
     }
 
     public Prestamo marcarDevuelto(Long id) {
         Prestamo prestamo = buscarPorId(id);
         prestamo.marcarDevuelto();
-        return repositorio.save(prestamo);
+        Prestamo guardado =
+            repositorio.save(prestamo);
+        publicador.publicarDevuelto(guardado.getId(),
+            guardado.getLibroId(),
+            guardado.getUsuarioId());
+        return guardado;
     }
 
     private void validarLibro(Long libroId) {
