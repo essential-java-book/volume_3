@@ -1,7 +1,6 @@
 package com.biblioteca.prestamos.servicio;
 
-import com.biblioteca.prestamos.cliente.LibroCliente;
-import com.biblioteca.prestamos.cliente.UsuarioCliente;
+import com.biblioteca.prestamos.cliente.ValidadorRelaciones;
 import com.biblioteca.prestamos.dominio.Prestamo;
 import com.biblioteca.prestamos.dominio.PrestamoNoEncontradoException;
 import com.biblioteca.prestamos.dominio.RecursoRelacionadoNoEncontradoException;
@@ -14,24 +13,26 @@ import org.springframework.stereotype.Service;
  * Logica de negocio del microservicio de prestamos.
  * Desde el Capitulo 6, "crear" valida el libro y el
  * usuario contra sus propios microservicios (via
- * Feign) antes de dar de alta el prestamo. Hasta el
- * Capitulo 12 no hay saga ni compensacion: aqui la
- * validacion es sincrona y no reserva nada todavia.
+ * ValidadorRelaciones, que envuelve los clientes
+ * Feign). Desde el Capitulo 7, esas llamadas llevan
+ * circuit breaker y reintentos (Resilience4j); un
+ * 404 sigue siendo "no existe" (RecursoRelacionado-
+ * NoEncontradoException), mientras que un fallo
+ * tecnico del servicio dependiente se traduce en
+ * ServicioNoDisponibleException. Hasta el Capitulo
+ * 12 no hay saga ni compensacion.
  */
 @Service
 public class PrestamoServicio {
 
     private final PrestamoRepositorio repositorio;
-    private final LibroCliente libroCliente;
-    private final UsuarioCliente usuarioCliente;
+    private final ValidadorRelaciones validador;
 
     public PrestamoServicio(
             PrestamoRepositorio repositorio,
-            LibroCliente libroCliente,
-            UsuarioCliente usuarioCliente) {
+            ValidadorRelaciones validador) {
         this.repositorio = repositorio;
-        this.libroCliente = libroCliente;
-        this.usuarioCliente = usuarioCliente;
+        this.validador = validador;
     }
 
     public List<Prestamo> listarTodos() {
@@ -67,7 +68,7 @@ public class PrestamoServicio {
 
     private void validarLibro(Long libroId) {
         try {
-            libroCliente.obtenerLibro(libroId);
+            validador.obtenerLibro(libroId);
         } catch (FeignException.NotFound ex) {
             throw noEncontrado(
                 "Libro no encontrado: ", libroId);
@@ -76,7 +77,7 @@ public class PrestamoServicio {
 
     private void validarUsuario(Long usuarioId) {
         try {
-            usuarioCliente.obtenerUsuario(usuarioId);
+            validador.obtenerUsuario(usuarioId);
         } catch (FeignException.NotFound ex) {
             throw noEncontrado(
                 "Usuario no encontrado: ", usuarioId);

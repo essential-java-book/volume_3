@@ -2,6 +2,7 @@ package com.biblioteca.prestamos.controlador;
 
 import com.biblioteca.prestamos.dominio.PrestamoNoEncontradoException;
 import com.biblioteca.prestamos.dominio.RecursoRelacionadoNoEncontradoException;
+import com.biblioteca.prestamos.dominio.ServicioNoDisponibleException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -33,6 +34,18 @@ public class ManejadorErrores {
                 ex.getMessage());
         problema.setTitle(
             "Recurso relacionado no encontrado");
+        return problema;
+    }
+
+    @ExceptionHandler(
+        ServicioNoDisponibleException.class)
+    public ProblemDetail manejarServicioNoDisponible(
+            ServicioNoDisponibleException ex) {
+        ProblemDetail problema = ProblemDetail
+            .forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                ex.getMessage());
+        problema.setTitle("Servicio no disponible");
         return problema;
     }
 }
