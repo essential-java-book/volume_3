@@ -1,7 +1,8 @@
 -- Los hashes bcrypt (68 caracteres) se dividen en
--- dos literales concatenados con "||" (H2/ANSI SQL)
--- solo para respetar el limite de 66 columnas --
--- el valor resultante es el mismo hash completo.
+-- dos literales concatenados con "||" (ANSI SQL,
+-- valido en H2 y en PostgreSQL) solo para respetar
+-- el limite de 66 columnas -- el valor resultante
+-- es el mismo hash completo.
 INSERT INTO credenciales (username, password,
     rol) VALUES
   ('usuario1',
