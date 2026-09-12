@@ -7,6 +7,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -14,12 +15,14 @@ import org.springframework.context.annotation.Bean;
  * prestamos. Java Esencial, Volumen 3, Capitulo 2
  * (JPA+H2); se registra en Eureka desde el
  * Capitulo 3; recibe la propiedad de bienvenida
- * del Config Server desde el Capitulo 5 (o el
- * valor por defecto si el Config Server no esta
- * arrancado).
+ * del Config Server desde el Capitulo 5; usa
+ * clientes Feign (LibroCliente, UsuarioCliente)
+ * desde el Capitulo 6 para validar el libro y el
+ * usuario al crear un prestamo.
  */
 @SpringBootApplication
 @EnableDiscoveryClient
+@EnableFeignClients
 public class ServicioPrestamosApplication {
 
     private static final Logger LOG =

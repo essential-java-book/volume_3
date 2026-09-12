@@ -1,6 +1,7 @@
 package com.biblioteca.prestamos.controlador;
 
 import com.biblioteca.prestamos.dominio.PrestamoNoEncontradoException;
+import com.biblioteca.prestamos.dominio.RecursoRelacionadoNoEncontradoException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -20,6 +21,18 @@ public class ManejadorErrores {
             .forStatusAndDetail(HttpStatus.NOT_FOUND,
                 ex.getMessage());
         problema.setTitle("Prestamo no encontrado");
+        return problema;
+    }
+
+    @ExceptionHandler(
+        RecursoRelacionadoNoEncontradoException.class)
+    public ProblemDetail manejarRelacionadoNoEncontrado(
+            RecursoRelacionadoNoEncontradoException ex) {
+        ProblemDetail problema = ProblemDetail
+            .forStatusAndDetail(HttpStatus.NOT_FOUND,
+                ex.getMessage());
+        problema.setTitle(
+            "Recurso relacionado no encontrado");
         return problema;
     }
 }
