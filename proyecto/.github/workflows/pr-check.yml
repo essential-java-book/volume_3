@@ -1,0 +1,52 @@
+# .github/workflows/pr-check.yml (Capitulo 15).
+#
+# CI ligero para Pull Requests: solo compila y
+# testea, sin construir imagenes ni desplegar (15.6).
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    name: "Compilar y testear"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: >-
+            maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-
+
+      - name: Verificar formato (Checkstyle)
+        run: |
+          ./mvnw checkstyle:check \
+            --batch-mode \
+            --no-transfer-progress
+
+      - name: Compilar y testear
+        run: |
+          ./mvnw verify \
+            --batch-mode \
+            --no-transfer-progress \
+            -Dspring.profiles.active=test
+
+      - name: Comentar cobertura en el PR
+        uses: madrapps/jacoco-report@v1
+        with:
+          paths: >-
+            **/target/site/jacoco/jacoco.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-overall: 0
+          min-coverage-changed-files: 0

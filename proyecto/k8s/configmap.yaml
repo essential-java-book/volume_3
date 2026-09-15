@@ -1,0 +1,66 @@
+# ConfigMap biblioteca-config (Capitulo 14):
+# variables compartidas por los ocho Deployment.
+# Ningun modulo usa todas -- Spring ignora sin
+# problema las que no le tocan, igual que ya
+# pasaba con las variables de entorno "de mas" en
+# el docker-compose.yml del cap. 13.
+#
+# host.minikube.internal es el nombre que minikube
+# (driver docker) resuelve al host: Postgres,
+# Kafka, Zipkin y Logstash siguen siendo los
+# contenedores ya levantados con
+# "docker compose up" en el cap. 13 -- este
+# capitulo NO los redespliega dentro del cluster,
+# solo los ocho modulos Spring Cloud (asi lo fija
+# la especificacion del capitulo). Los puertos son
+# los mismos publicados al host en el
+# docker-compose.yml: Zipkin 9411, Logstash 5000.
+# Kafka usa el 29093 (listener PLAINTEXT_K8S), no
+# el 29092 de PLAINTEXT_HOST -- ver a continuacion.
+#
+# SPRING_KAFKA_BOOTSTRAPSERVERS apunta al 29093, no
+# al 29092 (correccion 15/9/2026, encontrada
+# verificando el Capitulo 14): Kafka anuncia en sus
+# metadatos, para el listener PLAINTEXT_HOST
+# (29092), la direccion "localhost:29092" -- correcta
+# para un cliente en el propio Windows, pero un pod
+# de Kubernetes la resuelve contra si mismo, no
+# contra el host, y toda conexion posterior al
+# bootstrap falla para siempre. No se puede
+# solucionar cambiando ese valor -- rompiera el caso
+# de uso que lo motivo --, asi que docker-compose.yml
+# suma un tercer listener, PLAINTEXT_K8S (29093),
+# anunciado como host.minikube.internal:29093, que
+# este ConfigMap es quien usa.
+#
+# EUREKA_CLIENT_SERVICEURL_DEFAULTZONE y
+# SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_
+# SET_URI repiten en variable de entorno lo que
+# application-kubernetes.yml ya fija en
+# config-repo (correccion 15/9/2026): cinco de los
+# ocho <servicio>.yml propios tienen su propio
+# jwk-set-uri a "localhost:9000" y, en Config
+# Server, {aplicacion}.yml pesa mas que
+# application-{perfil}.yml, asi que sin esto el
+# valor "localhost" ganaria dentro del cluster --
+# mismo bug ya corregido con Docker Compose en el
+# cap. 13, misma solucion: variable de entorno,
+# que siempre gana sobre cualquier fuente de
+# Config Server.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: biblioteca-config
+data:
+  SPRING_PROFILES_ACTIVE: kubernetes
+  SPRING_CONFIG_IMPORT: >-
+    optional:configserver:http://config-server:8888
+  MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: >-
+    http://host.minikube.internal:9411/api/v2/spans
+  SPRING_KAFKA_BOOTSTRAPSERVERS: >-
+    host.minikube.internal:29093
+  LOGSTASH_HOST: host.minikube.internal
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: >-
+    http://eureka-server:8761/eureka/
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: >-
+    http://authorization-server:9000/oauth2/jwks

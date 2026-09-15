@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,7 +20,9 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 /**
  * API REST del microservicio de usuarios. No
  * existia en el Vol. 2 (informe de coherencia,
- * SS3.5) -- nace aqui, en el Volumen 3.
+ * SS3.5) -- nace aqui, en el Volumen 3. Lectura
+ * para cualquier autenticado; escritura exige el
+ * rol BIBLIOTECARIO (SeguridadConfig, Cap. 11).
  */
 @RestController
 @RequestMapping("/usuarios")
@@ -43,6 +46,7 @@ public class UsuarioControlador {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('BIBLIOTECARIO')")
     public ResponseEntity<Usuario> crear(
             @Valid @RequestBody Usuario usuario) {
         Usuario creado = servicio.crear(usuario);
@@ -56,12 +60,14 @@ public class UsuarioControlador {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('BIBLIOTECARIO')")
     public Usuario actualizar(@PathVariable Long id,
             @Valid @RequestBody Usuario datos) {
         return servicio.actualizar(id, datos);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('BIBLIOTECARIO')")
     public ResponseEntity<Void> eliminar(
             @PathVariable Long id) {
         servicio.eliminar(id);

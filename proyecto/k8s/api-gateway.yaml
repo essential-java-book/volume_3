@@ -1,0 +1,81 @@
+# api-gateway: Deployment + Service (Capitulo 14).
+# Imagen local, la misma que construyo
+# "docker compose up --build" en el cap. 13 --
+# "minikube image load" la importa al cluster
+# (imagePullPolicy: Never, no intenta descargarla
+# de ningun registro; eso llega en el cap. 15 con
+# Docker Hub). Las sondas usan los grupos de salud
+# de Kubernetes de Actuator (activos solo dentro
+# de Kubernetes, sin configuracion extra: Spring
+# Boot detecta KUBERNETES_SERVICE_HOST).
+#
+# Umbrales de sonda generosos -- hallazgo real de
+# verificacion (15/9/2026): en un nodo minikube con
+# recursos por defecto (2 CPU/4 GB) arrancando los
+# ocho modulos a la vez, mas el docker compose del
+# cap. 13 en el mismo equipo, cada JVM tarda mucho
+# mas de lo normal por pura contencion de CPU, no
+# por ningun fallo propio. Con los umbrales cortos
+# originales, la sonda de vida mataba el contenedor
+# antes de que terminara de arrancar -- bucle de
+# reinicio infinito. Corregido dando bastante mas
+# margen (no es apto para produccion: es una
+# decision explicita para un cluster local de un
+# solo nodo con recursos compartidos).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  labels:
+    app: api-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: proyecto-api-gateway:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: biblioteca-config
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            failureThreshold: 12
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080

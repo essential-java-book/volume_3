@@ -1,0 +1,91 @@
+# deployment.yaml (Capitulo 15): un Deployment por
+# entrada de .Values.services -- mismo contenido que
+# los ocho manifiestos sueltos del Capitulo 14
+# (sondas, recursos, ConfigMap comun, env propio por
+# modulo), generados aqui con un solo "range" en vez
+# de repetir el mismo bloque ocho veces.
+#
+# Los campos numericos (replicas, puertos, segundos
+# de sonda) se rellenan con "{{ ... }}" partido en
+# varias lineas -- nunca con el indicador de bloque
+# ">-": ese indicador siempre produce una cadena de
+# texto en YAML, y convertiria por ejemplo
+# "initialDelaySeconds" en la cadena "60" en vez del
+# entero 60 que exige el esquema de Kubernetes
+# (fallaria "kubectl apply" con un error de tipo).
+# Partir la expresion entre "{{" y "}}" en varias
+# lineas no tiene ese problema: son solo espacios
+# dentro de la propia plantilla, invisibles en el
+# texto ya renderizado -- el resultado sigue siendo
+# un escalar plano de una sola linea.
+{{- range $name, $svc := .Values.services }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app: {{ $name }}
+spec:
+  replicas: {{
+    $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: >-
+            {{ include "biblioteca.image" (dict
+              "global" $.Values.global
+              "name" $name) }}
+          imagePullPolicy: {{
+            $.Values.global.pullPolicy }}
+          ports:
+            - containerPort: {{ $svc.port }}
+          envFrom:
+            - configMapRef:
+                name: biblioteca-config
+          {{- if $svc.extraEnv }}
+          env:
+            {{- range $k, $v := $svc.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+          resources:
+            requests:
+              cpu: {{
+                $.Values.resources.large.requests.cpu }}
+              memory: {{
+                $.Values.resources.large.requests.memory }}
+            limits:
+              cpu: {{
+                $.Values.resources.large.limits.cpu }}
+              memory: {{
+                $.Values.resources.large.limits.memory }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{
+              $.Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{
+              $.Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{
+              $.Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{
+              $.Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{
+              $.Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{
+              $.Values.probes.liveness.failureThreshold }}
+---
+{{- end }}

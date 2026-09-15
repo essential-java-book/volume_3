@@ -1,0 +1,46 @@
+#!/bin/sh
+# Maven Wrapper: descarga y ejecuta Maven sin
+# necesitar una instalacion previa (Capitulo 13).
+# Lo usan los Dockerfile para builds reproducibles
+# (misma Maven en cualquier maquina, sin instalar
+# nada mas que un JDK). No es el generador oficial
+# de "mvn wrapper:wrapper" -- Maven Central esta
+# bloqueado en el entorno de escritura de este
+# libro -- pero cumple la misma funcion: en el
+# primer uso descarga y cachea la distribucion de
+# Maven indicada en maven-wrapper.properties.
+set -e
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+PROPS="$DIR/.mvn/wrapper/maven-wrapper.properties"
+
+if [ ! -f "$PROPS" ]; then
+  echo "No se encuentra $PROPS" 1>&2
+  exit 1
+fi
+
+DIST_URL="$(grep '^distributionUrl=' "$PROPS" \
+  | cut -d'=' -f2-)"
+ZIP_NAME="$(basename "$DIST_URL")"
+DIST_NAME="$(echo "$ZIP_NAME" \
+  | sed 's/-bin\.zip$//')"
+CACHE_DIR="$HOME/.m2/wrapper/dists/$DIST_NAME"
+MAVEN_HOME="$CACHE_DIR/$DIST_NAME"
+
+if [ ! -x "$MAVEN_HOME/bin/mvn" ]; then
+  mkdir -p "$CACHE_DIR"
+  TMP_ZIP="$CACHE_DIR/$ZIP_NAME"
+  echo "Descargando $DIST_URL ..." 1>&2
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL -o "$TMP_ZIP" "$DIST_URL"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$TMP_ZIP" "$DIST_URL"
+  else
+    echo "Se necesita curl o wget" 1>&2
+    exit 1
+  fi
+  unzip -q -o "$TMP_ZIP" -d "$CACHE_DIR"
+  rm -f "$TMP_ZIP"
+fi
+
+exec "$MAVEN_HOME/bin/mvn" "$@"

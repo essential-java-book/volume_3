@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging estructurado (Capitulo 10, ELK): cada linea
+  de log sale como un objeto JSON por la salida
+  estandar. Desde el Capitulo 13 (Docker Compose) un
+  agente de recogida la envia a Elasticsearch; Kibana
+  la consulta desde ahi. El traceId/spanId de
+  Micrometer Tracing (Capitulo 9) viaja en el MDC de
+  SLF4J y se incluye solo, sin tocar este fichero; lo
+  mismo vale para cualquier otro dato que un servicio
+  concreto anada al MDC (por ejemplo, el
+  correlationId de servicio-prestamos, Capitulo 6).
+
+  Capitulo 13: ademas de la consola, un segundo
+  appender envia los mismos logs por TCP a Logstash
+  (host parametrizado por LOGSTASH_HOST, definido en
+  docker-compose.yml), que los reenvia a
+  Elasticsearch; la consola sigue funcionando igual
+  fuera de Docker.
+-->
+<configuration>
+
+  <springProperty scope="context" name="app"
+      source="spring.application.name"/>
+  <springProperty scope="context" name="logstashHost"
+      source="logstash.host"/>
+
+  <appender name="JSON"
+      class="ch.qos.logback.core.ConsoleAppender">
+    <encoder
+        class=
+        "net.logstash.logback.encoder.LogstashEncoder">
+      <customFields>
+        {"aplicacion":"${app}"}
+      </customFields>
+    </encoder>
+  </appender>
+
+  <appender name="LOGSTASH"
+      class=
+      "net.logstash.logback.appender.LogstashTcpSocketAppender">
+    <destination>${logstashHost}:5000</destination>
+    <encoder
+        class=
+        "net.logstash.logback.encoder.LogstashEncoder">
+      <customFields>
+        {"aplicacion":"${app}"}
+      </customFields>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="JSON"/>
+    <appender-ref ref="LOGSTASH"/>
+  </root>
+
+</configuration>

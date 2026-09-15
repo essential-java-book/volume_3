@@ -1,0 +1,30 @@
+# Ingress biblioteca (Capitulo 14): expone
+# "/api/**" hacia api-gateway (informe SS3.3-19).
+# api-gateway todavia enruta sin el prefijo "/api"
+# (/libros/**, /usuarios/**, /prestamos/**: eso
+# llega a nivel de servicio en el Vol. 4), asi que
+# el Ingress quita el prefijo antes de reenviar la
+# peticion -- captura "/api" mas lo que venga
+# detras y solo reenvia esa segunda parte
+# (rewrite-target: /$2). Requiere el addon de
+# Ingress de minikube: "minikube addons enable
+# ingress" (NGINX Ingress Controller).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: biblioteca-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

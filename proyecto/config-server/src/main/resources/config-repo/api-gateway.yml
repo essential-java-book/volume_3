@@ -1,0 +1,11 @@
+spring:
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 2000
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: >-
+            http://localhost:9000/oauth2/jwks

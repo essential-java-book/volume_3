@@ -1,0 +1,16 @@
+# Chart.yaml (Capitulo 15): empaqueta como Helm los
+# mismos ocho Deployment/Service del Capitulo 14 (mas
+# el ConfigMap y el Ingress), parametrizados por
+# entorno con values.yaml/values-staging.yaml/
+# values-prod.yaml. El Capitulo 14 no usaba Helm a
+# proposito (Kubernetes puro, sin ninguna capa mas);
+# este capitulo lo introduce por primera vez, justo
+# donde hace falta: para desplegar el mismo sistema
+# en mas de un entorno sin duplicar manifiestos.
+apiVersion: v2
+name: biblioteca
+description: >-
+  Proyecto Biblioteca -- ocho modulos Spring Cloud
+version: 1.0.0
+appVersion: "1.0.0"
+type: application

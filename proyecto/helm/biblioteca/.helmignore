@@ -1,0 +1,9 @@
+# .helmignore (Capitulo 15): patron estandar del
+# scaffold de Helm, para no empaquetar nada que no
+# sea el chart en si si se llega a publicar.
+.git/
+.gitignore
+*.swp
+*.bak
+*.tmp
+.DS_Store

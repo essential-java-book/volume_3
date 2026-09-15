@@ -35,6 +35,18 @@ public class Libro {
 
     private boolean disponible = true;
 
+    /**
+     * Id del prestamo (servicio-prestamos) que
+     * tiene este libro reservado ahora mismo, o
+     * null si esta disponible. Lo usa la saga del
+     * Capitulo 12 para saber, al recibir
+     * PRESTAMO_CANCELADO o PRESTAMO_DEVUELTO, si
+     * esta liberacion le corresponde a este libro
+     * o si su reserva actual (si tiene otra) es de
+     * un prestamo distinto.
+     */
+    private Long prestamoReservaId;
+
     protected Libro() {
         // JPA
     }
@@ -94,5 +106,39 @@ public class Libro {
 
     public void marcarDisponible() {
         this.disponible = true;
+    }
+
+    public Long getPrestamoReservaId() {
+        return prestamoReservaId;
+    }
+
+    /**
+     * Reserva el libro para un prestamo (Capitulo
+     * 12). Si ya no esta disponible, no hace nada y
+     * devuelve false -- quien lo llame decidira si
+     * eso implica cancelar la saga.
+     */
+    public boolean reservarPara(Long prestamoId) {
+        if (!disponible) {
+            return false;
+        }
+        this.disponible = false;
+        this.prestamoReservaId = prestamoId;
+        return true;
+    }
+
+    /**
+     * Libera la reserva (compensacion de la saga o
+     * devolucion), pero solo si la reserva actual es
+     * la de ese mismo prestamo -- evita liberar por
+     * error un libro que esta reservado por otro
+     * prestamo distinto.
+     */
+    public void liberarSiEsDe(Long prestamoId) {
+        if (prestamoId != null && prestamoId.equals(
+                prestamoReservaId)) {
+            this.disponible = true;
+            this.prestamoReservaId = null;
+        }
     }
 }

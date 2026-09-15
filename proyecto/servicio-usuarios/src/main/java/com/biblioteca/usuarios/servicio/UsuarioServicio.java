@@ -48,23 +48,33 @@ public class UsuarioServicio {
     }
 
     /**
-     * Valida que el usuario puede tomar un
-     * prestamo mas y actualiza su contador. Lo usa
-     * la saga del Capitulo 12.
+     * Valida que el usuario puede tomar un prestamo
+     * mas y registra ese prestamo (participa en la
+     * saga del Capitulo 12, al recibir PRESTAMO_
+     * CREADO). Devuelve false si el usuario esta
+     * inactivo -- quien llama publicara entonces
+     * PRESTAMO_CANCELADO.
      */
-    public boolean validarYRegistrarPrestamo(Long id) {
+    public boolean validarYRegistrarPrestamo(Long id,
+            Long prestamoId) {
         Usuario usuario = buscarPorId(id);
-        if (!usuario.isActivo()) {
-            return false;
+        boolean exito = usuario
+            .registrarPrestamo(prestamoId);
+        if (exito) {
+            repositorio.save(usuario);
         }
-        usuario.incrementarPrestamosActivos();
-        repositorio.save(usuario);
-        return true;
+        return exito;
     }
 
-    public void liberarPrestamo(Long id) {
+    /**
+     * Libera un prestamo (compensacion de la saga o
+     * devolucion). Idempotente: ver Usuario.
+     * liberarPrestamo.
+     */
+    public void liberarPrestamo(Long id,
+            Long prestamoId) {
         Usuario usuario = buscarPorId(id);
-        usuario.decrementarPrestamosActivos();
+        usuario.liberarPrestamo(prestamoId);
         repositorio.save(usuario);
     }
 }

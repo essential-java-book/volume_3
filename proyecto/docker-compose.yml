@@ -1,0 +1,382 @@
+# docker-compose.yml (Capitulo 13): levanta los
+# ocho microservicios del proyecto Biblioteca junto
+# con su infraestructura -- PostgreSQL (una base de
+# datos por servicio), Kafka en modo KRaft, Zipkin
+# y el stack ELK (Elasticsearch, Logstash, Kibana)
+# -- en una unica red Docker, "biblioteca-net".
+# "docker compose up" se ejecuta desde esta misma
+# carpeta: el contexto de build de cada Dockerfile
+# es la raiz del repo (junto a pom.xml y mvnw).
+#
+# YAML no admite continuacion de linea con "\" (a
+# diferencia de los .properties de este proyecto).
+# Unas pocas lineas superan las 66 columnas porque
+# su valor es unico e indivisible sin cambiar su
+# significado: las direcciones de Kafka (varios
+# listeners separados por comas) y la ruta interna
+# fija que exige la imagen de Logstash para su
+# pipeline. Es la misma excepcion que ya se aplica
+# a los "import" de Java, aqui extendida a estos
+# dos casos concretos.
+
+networks:
+  biblioteca-net:
+    driver: bridge
+
+volumes:
+  postgres-libros-data:
+  postgres-usuarios-data:
+  postgres-prestamos-data:
+  postgres-auth-data:
+  elasticsearch-data:
+
+services:
+
+  postgres-libros:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: libros_db
+      POSTGRES_USER: libros
+      POSTGRES_PASSWORD: libros_pass
+    volumes:
+      - postgres-libros-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U libros -d libros_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - biblioteca-net
+
+  postgres-usuarios:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: usuarios_db
+      POSTGRES_USER: usuarios
+      POSTGRES_PASSWORD: usuarios_pass
+    volumes:
+      - postgres-usuarios-data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U usuarios -d usuarios_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - biblioteca-net
+
+  postgres-prestamos:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: prestamos_db
+      POSTGRES_USER: prestamos
+      POSTGRES_PASSWORD: prestamos_pass
+    volumes:
+      - postgres-prestamos-data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U prestamos -d prestamos_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - biblioteca-net
+
+  postgres-auth:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: auth_pass
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U auth -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - biblioteca-net
+
+  # Tercer listener PLAINTEXT_K8S (correccion del
+  # 15/9/2026, encontrada verificando el Capitulo
+  # 14): Kafka no solo acepta la conexion inicial en
+  # la direccion de "bootstrap.servers" -- tras ella,
+  # el cliente pide metadatos y Kafka le devuelve la
+  # direccion "advertised" de cada listener, que el
+  # cliente usa para TODAS las conexiones siguientes.
+  # PLAINTEXT_HOST se anuncia como "localhost:29092"
+  # a proposito, para que un cliente que corra en el
+  # propio equipo de Windows (fuera de Docker) pueda
+  # conectar -- pero un pod de Kubernetes que llega
+  # por host.minikube.internal:29092 recibe ese mismo
+  # "localhost" en los metadatos y lo resuelve contra
+  # si mismo, no contra el equipo anfitrion: la
+  # conexion de bootstrap funciona, pero cualquier
+  # conexion posterior falla para siempre ("Broker
+  # may not be available"), sin romper el arranque
+  # (el consumidor de Kafka de Spring reintenta en
+  # segundo plano) pero sin poder producir/consumir
+  # nunca. No se puede resolver cambiando el valor de
+  # PLAINTEXT_HOST -- eso rompiera el caso de uso
+  # original, un cliente en el propio Windows -- asi
+  # que se anade un tercer listener, dedicado a
+  # Kubernetes, que se anuncia con el hostname que
+  # minikube si resuelve de verdad.
+  kafka:
+    image: apache/kafka:3.7.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092,PLAINTEXT_K8S://:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092,PLAINTEXT_K8S://host.minikube.internal:29093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_K8S:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+    ports:
+      - "29092:29092"
+      - "29093:29093"
+    networks:
+      - biblioteca-net
+
+  zipkin:
+    image: openzipkin/zipkin:3
+    ports:
+      - "9411:9411"
+    networks:
+      - biblioteca-net
+
+  elasticsearch:
+    image:
+      docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - biblioteca-net
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.4
+    volumes:
+      - ./elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    ports:
+      - "5000:5000"
+    depends_on:
+      - elasticsearch
+    networks:
+      - biblioteca-net
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - biblioteca-net
+
+  eureka-server:
+    build:
+      context: .
+      dockerfile: eureka-server/Dockerfile
+    environment:
+      SPRING_CONFIG_IMPORT:
+        optional:configserver:http://config-server:8888
+    ports:
+      - "8761:8761"
+    depends_on:
+      - config-server
+    networks:
+      - biblioteca-net
+
+  config-server:
+    build:
+      context: .
+      dockerfile: config-server/Dockerfile
+    environment:
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:
+        http://zipkin:9411/api/v2/spans
+    ports:
+      - "8888:8888"
+    depends_on:
+      - zipkin
+    networks:
+      - biblioteca-net
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    environment:
+      SPRING_CONFIG_IMPORT:
+        optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:
+        http://eureka-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:
+        http://zipkin:9411/api/v2/spans
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:
+        http://authorization-server:9000/oauth2/jwks
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka-server
+      - config-server
+    networks:
+      - biblioteca-net
+
+  authorization-server:
+    build:
+      context: .
+      dockerfile: authorization-server/Dockerfile
+    environment:
+      SPRING_CONFIG_IMPORT:
+        optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:
+        http://eureka-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:
+        http://zipkin:9411/api/v2/spans
+    ports:
+      - "9000:9000"
+    depends_on:
+      eureka-server:
+        condition: service_started
+      config-server:
+        condition: service_started
+      postgres-auth:
+        condition: service_healthy
+    networks:
+      - biblioteca-net
+
+  servicio-libros:
+    build:
+      context: .
+      dockerfile: servicio-libros/Dockerfile
+    environment:
+      SPRING_CONFIG_IMPORT:
+        optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:
+        http://eureka-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:
+        http://zipkin:9411/api/v2/spans
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      LOGSTASH_HOST: logstash
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:
+        http://authorization-server:9000/oauth2/jwks
+    ports:
+      - "8081:8081"
+    depends_on:
+      eureka-server:
+        condition: service_started
+      config-server:
+        condition: service_started
+      postgres-libros:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - biblioteca-net
+
+  servicio-usuarios:
+    build:
+      context: .
+      dockerfile: servicio-usuarios/Dockerfile
+    environment:
+      SPRING_CONFIG_IMPORT:
+        optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:
+        http://eureka-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:
+        http://zipkin:9411/api/v2/spans
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      LOGSTASH_HOST: logstash
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:
+        http://authorization-server:9000/oauth2/jwks
+    ports:
+      - "8082:8082"
+    depends_on:
+      eureka-server:
+        condition: service_started
+      config-server:
+        condition: service_started
+      postgres-usuarios:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - biblioteca-net
+
+  servicio-prestamos:
+    build:
+      context: .
+      dockerfile: servicio-prestamos/Dockerfile
+    environment:
+      SPRING_CONFIG_IMPORT:
+        optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:
+        http://eureka-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:
+        http://zipkin:9411/api/v2/spans
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      LOGSTASH_HOST: logstash
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:
+        http://authorization-server:9000/oauth2/jwks
+    ports:
+      - "8083:8083"
+    depends_on:
+      eureka-server:
+        condition: service_started
+      config-server:
+        condition: service_started
+      postgres-prestamos:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - biblioteca-net
+
+  servicio-notificaciones:
+    build:
+      context: .
+      dockerfile: servicio-notificaciones/Dockerfile
+    environment:
+      SPRING_CONFIG_IMPORT:
+        optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:
+        http://eureka-server:8761/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:
+        http://zipkin:9411/api/v2/spans
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      LOGSTASH_HOST: logstash
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:
+        http://authorization-server:9000/oauth2/jwks
+    ports:
+      - "8084:8084"
+    depends_on:
+      - eureka-server
+      - config-server
+      - kafka
+    networks:
+      - biblioteca-net

@@ -1,0 +1,15 @@
+# service.yaml (Capitulo 15): un Service por entrada
+# de .Values.services, igual que en el Capitulo 14.
+{{- range $name, $svc := .Values.services }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  selector:
+    app: {{ $name }}
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+---
+{{- end }}

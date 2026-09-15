@@ -44,9 +44,13 @@ public class Prestamo {
     }
 
     /**
-     * Crea un prestamo ya activo (flujo simple,
-     * sin saga). El Capitulo 12 introduce el flujo
-     * SOLICITADO -> ACTIVO/CANCELADO.
+     * Crea un prestamo en estado SOLICITADO (flujo
+     * del Capitulo 12: la saga de coreografia lo
+     * confirma de inmediato -- ver confirmar() --,
+     * sin esperar a servicio-libros/servicio-
+     * usuarios, y solo lo cancela mas tarde si
+     * alguno de los dos no puede completar su
+     * parte).
      */
     public Prestamo(Long libroId, Long usuarioId) {
         this.libroId = libroId;
@@ -54,7 +58,7 @@ public class Prestamo {
         this.fechaPrestamo = LocalDate.now();
         this.fechaDevolucionPrevista =
             fechaPrestamo.plusDays(PLAZO_DIAS);
-        this.estado = EstadoPrestamo.ACTIVO;
+        this.estado = EstadoPrestamo.SOLICITADO;
     }
 
     public Long getId() {
@@ -83,6 +87,17 @@ public class Prestamo {
 
     public EstadoPrestamo getEstado() {
         return estado;
+    }
+
+    /**
+     * Finalizacion optimista de la saga (Capitulo
+     * 12): SOLICITADO -> ACTIVO sin esperar
+     * confirmacion sincrona de los participantes.
+     * Si alguno falla despues, cancelar() deshace
+     * esto via la compensacion de la coreografia.
+     */
+    public void confirmar() {
+        this.estado = EstadoPrestamo.ACTIVO;
     }
 
     public void marcarDevuelto() {

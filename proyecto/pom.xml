@@ -23,6 +23,12 @@
       UTF-8
     </project.build.sourceEncoding>
     <spring-boot.version>3.2.11</spring-boot.version>
+    <spring-cloud.version>2023.0.3</spring-cloud.version>
+    <resilience4j.version>2.2.0</resilience4j.version>
+    <logstash-encoder.version>7.4</logstash-encoder.version>
+    <spring-authorization-server.version>
+      1.2.3
+    </spring-authorization-server.version>
   </properties>
 
   <dependencyManagement>
@@ -31,6 +37,13 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-dependencies</artifactId>
         <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -44,15 +57,104 @@
           <groupId>org.springframework.boot</groupId>
           <artifactId>spring-boot-maven-plugin</artifactId>
           <version>${spring-boot.version}</version>
+          <executions>
+            <execution>
+              <goals>
+                <goal>repackage</goal>
+              </goals>
+            </execution>
+          </executions>
         </plugin>
       </plugins>
     </pluginManagement>
+    <!--
+      Capitulo 15 (CI/CD): jacoco, checkstyle y
+      surefire van aqui, en build/plugins del POM
+      raiz (no en pluginManagement), para que los
+      ocho modulos los hereden solos, sin repetir
+      <plugin> en cada pom.xml hijo como si hiciera
+      falta con spring-boot-maven-plugin de arriba.
+    -->
+    <plugins>
+      <!--
+        Version explicita necesaria a partir de aqui:
+        el POM raiz no extiende spring-boot-starter-
+        parent (solo importa sus BOM de dependencias),
+        asi que Maven usaria la version de surefire
+        que traiga por defecto: demasiado antigua en
+        muchas instalaciones para el proveedor de
+        JUnit 5 (Jupiter). Sin este fijado, las
+        pruebas nuevas de este capitulo podrian no
+        llegar a ejecutarse nunca, sin avisar.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
+      <!--
+        Cobertura de tests: se limita a instrumentar
+        y generar el informe. No falla el build si
+        la cobertura es baja: el pipeline solo la
+        publica como artefacto (paso "Subir informe
+        de cobertura" de cicd.yml), no la exige.
+      -->
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.12</version>
+        <executions>
+          <execution>
+            <id>preparar-agente</id>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>generar-informe</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!--
+        Estilo de codigo: solo la regla de las 66
+        columnas ya vigente en todo el proyecto desde
+        el Volumen 1 (excepcion ya documentada para
+        los "import"). No esta ligado a ninguna fase
+        del ciclo de vida: pr-check.yml lo invoca
+        aparte con "mvnw checkstyle:check", asi que
+        nunca afecta a "mvn compile/package/test".
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>3.5.0</version>
+        <configuration>
+          <configLocation>
+            ${maven.multiModuleProjectDirectory}/checkstyle.xml
+          </configLocation>
+          <violationSeverity>warning</violationSeverity>
+          <failOnViolation>true</failOnViolation>
+          <includeTestSourceDirectory>
+            true
+          </includeTestSourceDirectory>
+        </configuration>
+      </plugin>
+    </plugins>
   </build>
 
   <modules>
+    <module>eureka-server</module>
+    <module>config-server</module>
+    <module>api-gateway</module>
+    <module>authorization-server</module>
     <module>servicio-libros</module>
     <module>servicio-usuarios</module>
     <module>servicio-prestamos</module>
+    <module>servicio-notificaciones</module>
   </modules>
 
 </project>

@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +21,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
  * API REST del microservicio de libros.
  * Ruta base "/libros" -- el prefijo "/api" llega
  * en el Volumen 4 (informe de coherencia, SS3.3-19).
+ * Lectura publica; crear/actualizar/eliminar exige
+ * el rol BIBLIOTECARIO (SeguridadConfig, Cap. 11).
  */
 @RestController
 @RequestMapping("/libros")
@@ -42,6 +45,7 @@ public class LibroControlador {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('BIBLIOTECARIO')")
     public ResponseEntity<Libro> crear(
             @Valid @RequestBody Libro libro) {
         Libro creado = servicio.crear(libro);
@@ -55,12 +59,14 @@ public class LibroControlador {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('BIBLIOTECARIO')")
     public Libro actualizar(@PathVariable Long id,
             @Valid @RequestBody Libro datos) {
         return servicio.actualizar(id, datos);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('BIBLIOTECARIO')")
     public ResponseEntity<Void> eliminar(
             @PathVariable Long id) {
         servicio.eliminar(id);

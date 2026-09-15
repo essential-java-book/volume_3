@@ -48,22 +48,35 @@ public class LibroServicio {
     }
 
     /**
-     * Marca el libro como no disponible. Lo usara
-     * la saga del Capitulo 12 al reservarlo para
-     * un prestamo.
+     * Reserva el libro para un prestamo (participa
+     * en la saga de coreografia del Capitulo 12, al
+     * recibir PRESTAMO_CREADO). Devuelve false si el
+     * libro ya no estaba disponible -- quien llama
+     * (PrestamoEventoListener) publicara entonces
+     * PRESTAMO_CANCELADO.
      */
-    public void reservar(Long id) {
+    public boolean reservar(Long id,
+            Long prestamoId) {
         Libro libro = buscarPorId(id);
-        libro.marcarNoDisponible();
-        repositorio.save(libro);
+        boolean exito =
+            libro.reservarPara(prestamoId);
+        if (exito) {
+            repositorio.save(libro);
+        }
+        return exito;
     }
 
     /**
-     * Libera la reserva (compensacion de la saga).
+     * Libera la reserva del libro (compensacion de
+     * la saga al recibir PRESTAMO_CANCELADO, o
+     * liberacion normal al recibir PRESTAMO_
+     * DEVUELTO). Idempotente: si la reserva actual
+     * no es la de ese prestamo, no hace nada.
      */
-    public void liberarReserva(Long id) {
+    public void liberarReserva(Long id,
+            Long prestamoId) {
         Libro libro = buscarPorId(id);
-        libro.marcarDisponible();
+        libro.liberarSiEsDe(prestamoId);
         repositorio.save(libro);
     }
 }

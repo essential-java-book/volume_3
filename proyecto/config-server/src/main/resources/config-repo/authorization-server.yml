@@ -1,0 +1,6 @@
+# El modulo authorization-server llega en el
+# Capitulo 11 (el placeholder de este fichero,
+# escrito en el cap. 5, ya avisaba de esto). No
+# necesita nada propio todavia: hereda de
+# application.yml (tracing, logging) igual que
+# los demas clientes del Config Server.
