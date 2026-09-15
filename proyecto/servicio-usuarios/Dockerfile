@@ -10,6 +10,16 @@
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
+# eclipse-temurin:21-jdk no trae curl ni unzip
+# instalados (imagen minima, solo el JDK) -- los
+# necesita mvnw para descargar y descomprimir Maven
+# la primera vez. Sin esto, "./mvnw" fallaba con
+# exit code 127 (comando no encontrado).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pom.xml .
 COPY mvnw .
 COPY .mvn .mvn

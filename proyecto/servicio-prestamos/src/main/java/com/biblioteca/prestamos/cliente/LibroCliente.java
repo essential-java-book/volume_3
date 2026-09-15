@@ -14,5 +14,5 @@ import org.springframework.web.bind.annotation.PathVariable;
 public interface LibroCliente {
 
     @GetMapping("/libros/{id}")
-    LibroDto obtenerLibro(@PathVariable Long id);
+    LibroDto obtenerLibro(@PathVariable("id") Long id);
 }
