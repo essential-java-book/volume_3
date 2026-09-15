@@ -17,6 +17,24 @@ import org.springframework.security.web.SecurityFilterChain;
  * Security da por defecto sirve para autenticar a
  * "usuario1"/"bibliotecario1" cuando el navegador
  * llega a /oauth2/authorize.
+ *
+ * "/actuator/health/**" tambien queda publico --
+ * correccion del 15/9/2026, encontrada al verificar
+ * el Capitulo 14: las sondas de Kubernetes
+ * (kubelet) llaman a /actuator/health/liveness y
+ * /actuator/health/readiness sin sesion ninguna, y
+ * el matcher de @Order(1) solo cubre los endpoints
+ * propios del protocolo OAuth2 -- estas peticiones
+ * caian aqui y esta cadena las mandaba al formulario
+ * de login, que un kubelet nunca completa (401/302
+ * segun el caso), matando el pod en bucle. No existia
+ * forma de arreglarlo desde fuera (ninguna propiedad
+ * lo controla): hacia falta este cambio en el propio
+ * filtro. No reabre ninguna decision del Capitulo 11
+ * -- el resto sigue exigiendo login igual que antes
+ * --, solo anade la excepcion estandar que recomienda
+ * la documentacion de Spring Boot para sondas de
+ * salud de Kubernetes.
  */
 @Configuration
 public class SeguridadWebConfig {
@@ -27,7 +45,11 @@ public class SeguridadWebConfig {
             cadenaSeguridadWeb(HttpSecurity http)
             throws Exception {
         http.authorizeHttpRequests(peticiones ->
-                peticiones.anyRequest()
+                peticiones
+                    .requestMatchers(
+                        "/actuator/health/**")
+                    .permitAll()
+                    .anyRequest()
                     .authenticated())
             .formLogin(Customizer.withDefaults());
         return http.build();

@@ -18,6 +18,22 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
  * microservicio de destino. "GET /libros/**" queda
  * publico, igual que en servicio-libros; el resto
  * exige un JWT valido.
+ *
+ * "/actuator/health/**" tambien queda publico --
+ * correccion del 15/9/2026, encontrada al verificar
+ * el Capitulo 14: las sondas de Kubernetes
+ * (kubelet) llaman a /actuator/health/liveness y
+ * /actuator/health/readiness sin ningun JWT, y sin
+ * este permitAll la cadena de seguridad las
+ * rechazaba con 401, matando el pod en bucle. No
+ * existia forma de arreglarlo desde fuera (ninguna
+ * propiedad lo controla): hacia falta este cambio
+ * en el propio filtro. No reabre la decision de
+ * seguridad del Capitulo 11 -- los endpoints de
+ * negocio siguen exigiendo JWT igual que antes --,
+ * solo anade la excepcion estandar que recomienda la
+ * documentacion de Spring Boot para sondas de salud
+ * de Kubernetes.
  */
 @Configuration
 @EnableWebFluxSecurity
@@ -30,6 +46,9 @@ public class SeguridadConfig {
                 ServerHttpSecurity.CsrfSpec::disable)
             .authorizeExchange(intercambios ->
                 intercambios
+                    .pathMatchers(
+                        "/actuator/health/**")
+                    .permitAll()
                     .pathMatchers(HttpMethod.GET,
                         "/libros/**").permitAll()
                     .anyExchange().authenticated())

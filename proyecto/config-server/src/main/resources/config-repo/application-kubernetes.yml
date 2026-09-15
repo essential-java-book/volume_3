@@ -1,0 +1,45 @@
+# Perfil "kubernetes" (Capitulo 14), compartido
+# por los ocho modulos. Config Server lo sirve
+# ademas de application.yml y del <servicio>.yml
+# propio de cada cliente en cuanto ese pod activa
+# el perfil (SPRING_PROFILES_ACTIVE=kubernetes,
+# fijado en el ConfigMap biblioteca-config).
+#
+# Solo van aqui los hostnames que SI son nombres
+# de Service de Kubernetes (eureka-server y
+# authorization-server viven en el mismo cluster).
+# Postgres/Kafka/Zipkin/Logstash siguen fuera del
+# cluster (reutilizan el docker compose del cap.
+# 13) y se resuelven via host.minikube.internal en
+# el ConfigMap, no aqui.
+#
+# Aviso de precedencia (correccion 15/9/2026): los
+# cinco <servicio>.yml (api-gateway, servicio-
+# libros/usuarios/prestamos/notificaciones) ya
+# fijan su propio jwk-set-uri a "localhost:9000"
+# (lo necesita el modo sin Docker). En Config
+# Server, {aplicacion}.yml pesa mas que
+# application-{perfil}.yml, asi que ese valor
+# "localhost" ganaria aqui -- mismo tipo de bug ya
+# detectado y corregido con Docker Compose en el
+# cap. 13. Misma solucion: el ConfigMap
+# biblioteca-config fija las dos propiedades de
+# abajo tambien como variable de entorno, que
+# siempre gana sobre cualquier fuente de Config
+# Server. Este fichero se mantiene porque la
+# especificacion del capitulo lo exige
+# literalmente ("application-kubernetes.yml en
+# config-repo") y documenta el hostname correcto,
+# pero quien lo aplica de verdad es el ConfigMap.
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: >-
+        http://eureka-server:8761/eureka/
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: >-
+            http://authorization-server:9000/oauth2/jwks

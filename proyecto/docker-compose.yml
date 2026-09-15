@@ -108,6 +108,31 @@ services:
     networks:
       - biblioteca-net
 
+  # Tercer listener PLAINTEXT_K8S (correccion del
+  # 15/9/2026, encontrada verificando el Capitulo
+  # 14): Kafka no solo acepta la conexion inicial en
+  # la direccion de "bootstrap.servers" -- tras ella,
+  # el cliente pide metadatos y Kafka le devuelve la
+  # direccion "advertised" de cada listener, que el
+  # cliente usa para TODAS las conexiones siguientes.
+  # PLAINTEXT_HOST se anuncia como "localhost:29092"
+  # a proposito, para que un cliente que corra en el
+  # propio equipo de Windows (fuera de Docker) pueda
+  # conectar -- pero un pod de Kubernetes que llega
+  # por host.minikube.internal:29092 recibe ese mismo
+  # "localhost" en los metadatos y lo resuelve contra
+  # si mismo, no contra el equipo anfitrion: la
+  # conexion de bootstrap funciona, pero cualquier
+  # conexion posterior falla para siempre ("Broker
+  # may not be available"), sin romper el arranque
+  # (el consumidor de Kafka de Spring reintenta en
+  # segundo plano) pero sin poder producir/consumir
+  # nunca. No se puede resolver cambiando el valor de
+  # PLAINTEXT_HOST -- eso rompiera el caso de uso
+  # original, un cliente en el propio Windows -- asi
+  # que se anade un tercer listener, dedicado a
+  # Kubernetes, que se anuncia con el hostname que
+  # minikube si resuelve de verdad.
   kafka:
     image: apache/kafka:3.7.0
     environment:
@@ -115,9 +140,9 @@ services:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:29092,PLAINTEXT_K8S://:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092,PLAINTEXT_K8S://host.minikube.internal:29093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_K8S:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -126,6 +151,7 @@ services:
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     ports:
       - "29092:29092"
+      - "29093:29093"
     networks:
       - biblioteca-net
 
