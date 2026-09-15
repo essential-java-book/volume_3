@@ -1,0 +1,112 @@
+# values.yaml (Capitulo 15): valores por defecto.
+# Reproducen exactamente el despliegue local del
+# Capitulo 14 (minikube, imagenes ya cargadas con
+# "minikube image load", infraestructura pesada del
+# Capitulo 13 alcanzada via host.minikube.internal) --
+# "helm install biblioteca ./helm/biblioteca" con
+# solo este fichero renderiza los mismos manifiestos
+# que ya estan en k8s/, sin ningun cambio de
+# comportamiento. values-staging.yaml y values-
+# prod.yaml solo sobrescriben lo que cambia por
+# entorno (14.8 no reabre nada del Capitulo 14).
+global:
+  # En local, la misma convencion de nombre que usa
+  # "docker compose build" (proyecto-<servicio>).
+  # En staging/produccion, el pipeline pasa
+  # imageRepository=biblioteca e imageRegistry con
+  # el usuario de Docker Hub via "--set" (15.5/15.10).
+  imageRegistry: ""
+  imageRepository: proyecto
+  imageTag: latest
+  pullPolicy: Never
+
+configMap:
+  springProfilesActive: kubernetes
+  springConfigImport: >-
+    optional:configserver:http://config-server:8888
+  zipkinEndpoint: >-
+    http://host.minikube.internal:9411/api/v2/spans
+  kafkaBootstrapServers: >-
+    host.minikube.internal:29093
+  logstashHost: host.minikube.internal
+  eurekaServiceUrl: >-
+    http://eureka-server:8761/eureka/
+  jwkSetUri: >-
+    http://authorization-server:9000/oauth2/jwks
+
+ingress:
+  enabled: true
+  className: nginx
+  # Vacio a proposito: sin Host, igual que el
+  # Ingress plano del Capitulo 14 (se llega por
+  # "minikube tunnel" a 127.0.0.1).
+  host: ""
+
+resources:
+  large:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+probes:
+  readiness:
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    failureThreshold: 10
+  liveness:
+    initialDelaySeconds: 120
+    periodSeconds: 20
+    failureThreshold: 12
+
+autoscaling:
+  enabled: false
+
+# Un modulo por entrada. "port" es fijo (puerto real
+# del microservicio); "replicas" y "extraEnv" son lo
+# unico que un entorno puede necesitar tocar aparte
+# de lo global -- igual que en el Capitulo 14, donde
+# config-server, authorization-server y los tres
+# servicios con Postgres tenian su propio "env:"
+# ademas del ConfigMap comun.
+services:
+  eureka-server:
+    port: 8761
+    replicas: 1
+  config-server:
+    port: 8888
+    replicas: 1
+    extraEnv:
+      SPRING_PROFILES_ACTIVE: native,kubernetes
+  api-gateway:
+    port: 8080
+    replicas: 1
+  authorization-server:
+    port: 9000
+    replicas: 1
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://host.minikube.internal:5436/auth_db
+  servicio-libros:
+    port: 8081
+    replicas: 1
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://host.minikube.internal:5433/libros_db
+  servicio-usuarios:
+    port: 8082
+    replicas: 1
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://host.minikube.internal:5434/usuarios_db
+  servicio-prestamos:
+    port: 8083
+    replicas: 1
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://host.minikube.internal:5435/prestamos_db
+  servicio-notificaciones:
+    port: 8084
+    replicas: 1

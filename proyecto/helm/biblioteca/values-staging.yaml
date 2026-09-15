@@ -1,0 +1,65 @@
+# values-staging.yaml (Capitulo 15): overrides para
+# el entorno de staging (15.8). Solo lo que cambia
+# frente a values.yaml -- Helm fusiona esto encima
+# de los valores por defecto, no los sustituye.
+#
+# Nota de alcance (15/9/2026): este proyecto no tiene
+# un cluster de staging real (ver cicd.yml). Los
+# hostnames de infraestructura de aqui abajo son
+# ilustrativos -- el patron que seguiria un staging
+# de verdad con Kafka/Postgres/Zipkin propios en vez
+# de compartir el docker-compose local del autor via
+# host.minikube.internal -- y no se han verificado
+# contra nada real.
+#
+# Las URL de SPRING_DATASOURCE_URL de aqui abajo
+# superan las 66 columnas por ser valores atomicos
+# indivisibles (hostnames largos) -- misma excepcion
+# ya documentada en el Capitulo 14 para el mismo
+# caso con host.minikube.internal.
+global:
+  imageRepository: biblioteca
+  pullPolicy: Always
+
+ingress:
+  host: staging.biblioteca.example.com
+
+resources:
+  large:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+autoscaling:
+  enabled: false
+
+configMap:
+  zipkinEndpoint: >-
+    http://zipkin.staging.svc.cluster.local:9411/api/v2/spans
+  kafkaBootstrapServers: >-
+    kafka.staging.svc.cluster.local:9092
+  logstashHost: logstash.staging.svc.cluster.local
+
+services:
+  authorization-server:
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-auth.staging.svc.cluster.local:5432/auth_db
+  servicio-libros:
+    replicas: 1
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-libros.staging.svc.cluster.local:5432/libros_db
+  servicio-usuarios:
+    replicas: 1
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-usuarios.staging.svc.cluster.local:5432/usuarios_db
+  servicio-prestamos:
+    replicas: 1
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-prestamos.staging.svc.cluster.local:5432/prestamos_db

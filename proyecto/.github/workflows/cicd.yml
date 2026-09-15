@@ -1,0 +1,365 @@
+# .github/workflows/cicd.yml (Capitulo 15).
+#
+# Pipeline completo: CI (compilar + testear) ->
+# construir y publicar imagenes en Docker Hub ->
+# desplegar a staging -> desplegar a produccion con
+# aprobacion manual. Sigue la estructura del capitulo
+# (15.5) para los ocho modulos del proyecto.
+#
+# Nota de alcance (15/9/2026, verificando este
+# capitulo): los jobs "ci" y "docker-build" se pueden
+# ejecutar de verdad en este repositorio -- solo
+# hacen falta los secrets DOCKERHUB_USERNAME y
+# DOCKERHUB_TOKEN. Los jobs "deploy-staging" y
+# "deploy-production" necesitan un cluster de
+# Kubernetes real y alcanzable desde un runner de
+# GitHub Actions en la nube (KUBE_CONFIG_STAGING/
+# KUBE_CONFIG_PRODUCTION); el unico cluster de este
+# proyecto es el minikube local del equipo del autor,
+# al que un runner en la nube no puede llegar. Estos
+# dos jobs quedan escritos tal como los pide el
+# manuscrito -- codigo correcto, listo para un
+# cluster real en la nube el dia que exista -- pero
+# no se han ejecutado en este entorno; si haces push
+# a main sin configurar esos secrets, fallaran de
+# forma esperada al intentar conectar. Documentado en
+# el CHANGELOG del capitulo, mismo criterio ya usado
+# con el acceso bloqueado a Maven Central.
+name: Biblioteca CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: >-
+    ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "21"
+  REGISTRY: docker.io
+  IMAGE_PREFIX: >-
+    ${{ secrets.DOCKERHUB_USERNAME }}/biblioteca
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+
+  # =====================================
+  # JOB 1: Build y Tests (CI)
+  # =====================================
+  ci:
+    name: "CI - Build & Test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: >-
+            ${{ env.JAVA_VERSION }}
+          distribution: temurin
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: >-
+            maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-
+
+      - name: Compilar y ejecutar tests
+        run: |
+          ./mvnw verify \
+            --batch-mode \
+            --no-transfer-progress \
+            -Dspring.profiles.active=test
+
+      - name: Publicar resultados de tests
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: "Tests Maven"
+          path: >-
+            **/target/surefire-reports/*.xml
+          reporter: java-junit
+          fail-on-error: true
+
+      - name: Subir informe de cobertura
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: "**/target/site/jacoco/"
+          retention-days: 7
+
+  # =====================================
+  # JOB 2: Build y Push de imagenes Docker
+  # =====================================
+  docker-build:
+    name: "Docker - Build & Push"
+    runs-on: ubuntu-latest
+    needs: ci
+    timeout-minutes: 30
+    if: github.event_name == 'push'
+
+    strategy:
+      matrix:
+        service:
+          - name: eureka-server
+            port: 8761
+          - name: config-server
+            port: 8888
+          - name: api-gateway
+            port: 8080
+          - name: authorization-server
+            port: 9000
+          - name: servicio-libros
+            port: 8081
+          - name: servicio-usuarios
+            port: 8082
+          - name: servicio-prestamos
+            port: 8083
+          - name: servicio-notificaciones
+            port: 8084
+      fail-fast: false
+
+    steps:
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: >-
+            ${{ secrets.DOCKERHUB_USERNAME }}
+          password: >-
+            ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extraer metadatos Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: >-
+            ${{ env.IMAGE_PREFIX }}-${{
+            matrix.service.name }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{
+              github.ref == 'refs/heads/main' }}
+
+      - name: Build y Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: >-
+            ${{ matrix.service.name }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =====================================
+  # JOB 3: Deploy a Staging
+  # =====================================
+  deploy-staging:
+    name: "Deploy -> Staging"
+    runs-on: ubuntu-latest
+    needs: docker-build
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: >-
+        https://staging.biblioteca.example.com
+
+    steps:
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.14.0"
+
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "1.29.0"
+
+      - name: Configurar kubeconfig (staging)
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" \
+            > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Deploy Helm a staging
+        run: |
+          helm upgrade --install biblioteca \
+            ./helm/biblioteca \
+            --namespace biblioteca-staging \
+            --create-namespace \
+            --values helm/biblioteca/values.yaml \
+            --values \
+              helm/biblioteca/values-staging.yaml \
+            --set global.imageTag=${{ github.sha }} \
+            --set global.imageRegistry=${{
+              secrets.DOCKERHUB_USERNAME }}/ \
+            --set global.pullPolicy=Always \
+            --timeout 10m \
+            --wait \
+            --atomic
+
+      - name: Smoke tests en staging
+        run: |
+          GATEWAY_URL="\
+          https://staging.biblioteca.example.com"
+
+          echo "-> Comprobando salud del gateway..."
+          curl -fs "$GATEWAY_URL/actuator/health" \
+            | jq .status | grep -q '"UP"'
+
+          echo "-> Comprobando endpoint de libros..."
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
+            -H "Authorization: Bearer ${{
+              secrets.SMOKE_TEST_TOKEN }}" \
+            "$GATEWAY_URL/api/libros")
+          [ "$STATUS" = "200" ] \
+            || (echo "Fallo: $STATUS" && exit 1)
+
+          echo "Smoke tests superados"
+
+      - name: Notificar Slack - staging OK
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Biblioteca desplegado en \
+                staging -- commit ${{ github.sha }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: >-
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Notificar Slack - staging FALLIDO
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Biblioteca FALLO en staging \
+                -- commit ${{ github.sha }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: >-
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # =====================================
+  # JOB 4: Deploy a Produccion
+  # =====================================
+  deploy-production:
+    name: "Deploy -> Produccion"
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    timeout-minutes: 20
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: production
+      url: >-
+        https://biblioteca.example.com
+
+    steps:
+      - name: Checkout codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "3.14.0"
+
+      - name: Instalar kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "1.29.0"
+
+      - name: Configurar kubeconfig (produccion)
+        run: |
+          mkdir -p ~/.kube
+          echo \
+            "${{ secrets.KUBE_CONFIG_PRODUCTION }}" \
+            > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Extraer version del tag
+        id: version
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" \
+            >> $GITHUB_OUTPUT
+
+      - name: Deploy Helm a produccion
+        run: |
+          helm upgrade --install biblioteca \
+            ./helm/biblioteca \
+            --namespace biblioteca \
+            --create-namespace \
+            --values helm/biblioteca/values.yaml \
+            --values \
+              helm/biblioteca/values-prod.yaml \
+            --set global.imageTag=${{ github.sha }} \
+            --set global.imageRegistry=${{
+              secrets.DOCKERHUB_USERNAME }}/ \
+            --set global.pullPolicy=Always \
+            --timeout 15m \
+            --wait \
+            --atomic
+
+      - name: Notificar Slack - produccion OK
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Biblioteca v${{
+                steps.version.outputs.VERSION }} \
+                desplegado en PRODUCCION"
+            }
+        env:
+          SLACK_WEBHOOK_URL: >-
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Crear Release en GitHub
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: >-
+            Biblioteca ${{ github.ref_name }}
+          generate_release_notes: true

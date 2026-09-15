@@ -1,0 +1,23 @@
+# configmap.yaml (Capitulo 15): mismas siete claves
+# del ConfigMap biblioteca-config del Capitulo 14,
+# ahora tomadas de .Values.configMap para poder
+# variar por entorno (values-staging.yaml/values-
+# prod.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: biblioteca-config
+data:
+  SPRING_PROFILES_ACTIVE: >-
+    {{ .Values.configMap.springProfilesActive }}
+  SPRING_CONFIG_IMPORT: >-
+    {{ .Values.configMap.springConfigImport }}
+  MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: >-
+    {{ .Values.configMap.zipkinEndpoint }}
+  SPRING_KAFKA_BOOTSTRAPSERVERS: >-
+    {{ .Values.configMap.kafkaBootstrapServers }}
+  LOGSTASH_HOST: {{ .Values.configMap.logstashHost }}
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: >-
+    {{ .Values.configMap.eurekaServiceUrl }}
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: >-
+    {{ .Values.configMap.jwkSetUri }}

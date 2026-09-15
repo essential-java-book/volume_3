@@ -1,0 +1,70 @@
+# values-prod.yaml (Capitulo 15): overrides para el
+# entorno de produccion (15.8). Solo lo que cambia
+# frente a values.yaml -- Helm fusiona esto encima
+# de los valores por defecto, no los sustituye.
+#
+# Nota de alcance (15/9/2026): este proyecto no tiene
+# un cluster de produccion real (ver cicd.yml). Los
+# hostnames de infraestructura de aqui abajo son
+# ilustrativos y no se han verificado contra nada
+# real -- el "deploy-production" de cicd.yml queda
+# como codigo correcto segun el manuscrito, no como
+# un despliegue ya probado.
+#
+# Las URL de SPRING_DATASOURCE_URL de aqui abajo
+# superan las 66 columnas por ser valores atomicos
+# indivisibles (hostnames largos) -- misma excepcion
+# ya documentada en el Capitulo 14 para el mismo
+# caso con host.minikube.internal.
+global:
+  imageRepository: biblioteca
+  pullPolicy: Always
+
+ingress:
+  host: biblioteca.example.com
+
+resources:
+  large:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1200m
+      memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  cpuThreshold: 65
+
+configMap:
+  zipkinEndpoint: >-
+    http://zipkin.prod.svc.cluster.local:9411/api/v2/spans
+  kafkaBootstrapServers: >-
+    kafka.prod.svc.cluster.local:9092
+  logstashHost: logstash.prod.svc.cluster.local
+
+services:
+  api-gateway:
+    replicas: 3
+  authorization-server:
+    replicas: 2
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-auth.prod.svc.cluster.local:5432/auth_db
+  servicio-libros:
+    replicas: 3
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-libros.prod.svc.cluster.local:5432/libros_db
+  servicio-usuarios:
+    replicas: 2
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-usuarios.prod.svc.cluster.local:5432/usuarios_db
+  servicio-prestamos:
+    replicas: 3
+    extraEnv:
+      SPRING_DATASOURCE_URL: >-
+        jdbc:postgresql://postgres-prestamos.prod.svc.cluster.local:5432/prestamos_db

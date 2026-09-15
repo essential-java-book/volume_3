@@ -54,13 +54,15 @@ capítulo.
 | 12 | `v3-cap12` | Outbox, saga por coreografía, proyección de lectura (CQRS) |
 | 13 | `v3-cap13` | Dockerfiles y `docker-compose.yml` de los ocho módulos; PostgreSQL + Flyway por servicio |
 | 14 | `v3-cap14` | Manifiestos de Kubernetes (Deployment/Service/Ingress) |
-| 15 | `v3-cap15` | GitHub Actions (CI/CD) · `v3.0.0` |
+| 15 | `v3-cap15` | GitHub Actions (CI/CD) + Helm (`.github/workflows/`, `helm/biblioteca/`) · `v3.0.0` |
 
 ## Cómo compilar y ejecutar
 
 Requisitos: JDK 21 (Temurin recomendado) y Maven 3.9+. Desde el
 capítulo 13, Docker y Docker Compose; desde el capítulo 14, un
-clúster de Kubernetes local (minikube).
+clúster de Kubernetes local (minikube); desde el capítulo 15,
+Helm si quieres desplegar con `helm/biblioteca/` en vez de los
+manifiestos sueltos de `k8s/`.
 
 ```bash
 cd proyecto
@@ -79,6 +81,30 @@ Ver `proyecto/README.md` para el detalle de arranque de cada módulo.
 | `verificar-todo.sh` / `verificar-todo.ps1` | Recorre los 15 tags: compila cada uno con Maven (reactor completo de `proyecto/`) y, desde que existen tests, los ejecuta también. |
 
 En Windows: `powershell -ExecutionPolicy Bypass -File tools\verificar-todo.ps1` desde la raíz del repositorio, con `git`, `mvn` y `java` en el PATH.
+
+## CI/CD (Capítulo 15)
+
+`.github/workflows/cicd.yml` compila, testea, construye y
+publica en Docker Hub las ocho imágenes, despliega a staging
+y, con aprobación manual, a producción. `.github/workflows/
+pr-check.yml` es la comprobación ligera de cada Pull Request
+(Checkstyle + `mvn verify`). El despliegue usa el Chart de
+Helm de `helm/biblioteca/` (nuevo en este capítulo: el
+Capítulo 14 usaba Kubernetes sin Helm a propósito) — con los
+valores por defecto de `values.yaml` reproduce exactamente
+los mismos manifiestos que ya había en `k8s/`; `values-
+staging.yaml` y `values-prod.yaml` sólo cambian lo que varía
+por entorno.
+
+Los jobs `ci` y `docker-build` se pueden ejecutar de verdad
+con solo los secrets `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`
+configurados en el repositorio. `deploy-staging` y `deploy-
+production` necesitan un clúster de Kubernetes real y
+accesible desde un runner de GitHub Actions en la nube — el
+único clúster de este proyecto es el minikube local, al que
+un runner en la nube no llega, así que esos dos jobs quedan
+como código correcto según el manuscrito, sin ejecutar contra
+ningún clúster real (ver `CHANGELOG-capitulos.md`, Cap. 15).
 
 ## Reglas del proyecto (para que tu código coincida con el del libro)
 
